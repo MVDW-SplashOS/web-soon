@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { WebGLLogo } from "./WebGLLogo";
-import "./App.css";
+import { WebGLLogo } from "./components/WebGLLogo";
 
 function App() {
     const [ready, setReady] = useState(false);
