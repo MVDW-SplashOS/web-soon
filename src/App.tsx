@@ -34,8 +34,8 @@ function App() {
                 </div>
 
                 <footer className="footer">
-                    Copyright &copy; 2020-2026 SplashOS. All rights reserved.
-                    Logo by{" "}
+                    Copyright &copy; 2020-{new Date().getFullYear()} SplashOS.
+                    All rights reserved. Logo by{" "}
                     <a
                         href="https://github.com/nidrax"
                         target="_blank"
