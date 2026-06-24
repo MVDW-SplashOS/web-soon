@@ -1,9 +1,5 @@
 import { useEffect, useRef } from "react";
 
-// ── SplashOS logo path (scaled from favicon.svg) ──
-const LOGO_PATH =
-    "M259.46 449.38c-6.64 8.45-20.21 3.75-20.21-6.98V339.37a22.6 22.6 0 0 0-22.62-22.62H102.87c-9.2 0-14.56-10.4-9.2-17.88l74.8-104.71c10.7-14.97 0-35.78-18.42-35.78H12.37c-9.2 0-14.56-10.4-9.2-17.88L100.13 4.74c2.14-2.97 5.56-4.74 9.2-4.74h288.94c9.2 0 14.56 10.4 9.2 17.88l-74.8 104.71c-10.7 14.98 0 35.79 18.42 35.79h113.77c9.43 0 14.73 10.88 8.9 18.3L259.47 449.4z";
-
 const hexToRgb = (hex: string): [number, number, number] => {
     const value = hex.replace("#", "");
     return [
@@ -115,9 +111,16 @@ void main() {
     field = (field - 0.2) * 2.0 + 0.5;
     field = clamp(field, 0.0, 1.0);
 
-    // Quantize to discrete color bands for hard edges between blobs
+    // Quantize with anti-aliasing — soft blend at boundaries only
     float levels = max(float(u_colorCount - 1), 1.0);
-    field = floor(field * levels + 0.5) / levels;
+    float scaled = field * levels;
+    float aa = 2.0 / u_resolution.y;  // ~2px anti-alias width
+
+    float hard = floor(scaled + 0.5) / levels;          // crisp color
+    float soft = scaled / levels;                        // smooth gradient
+    float dist_to_step = abs(fract(scaled + 0.5) - 0.5); // distance from boundary
+    float t = smoothstep(0.0, aa, dist_to_step);         // 0 at boundary, 1 in flats
+    field = mix(soft, hard, t);
 
     vec3 color = gradientColor(field);
 
@@ -127,9 +130,8 @@ void main() {
 
     color = clamp(color, 0.0, 1.0);
 
-    // Sample mask and sharpen the edges
+    // Sample mask — canvas 2D already anti-aliases the path
     float alpha = texture2D(u_mask, vec2(uv.x, 1.0 - uv.y)).a;
-    alpha = smoothstep(0.05, 0.25, alpha);
     gl_FragColor = vec4(color * alpha, alpha);
     }
     `;
@@ -175,21 +177,7 @@ interface Props {
 export function WebGLLogo({
     logoW = 480,
     logoH = 460,
-    colors = (() => {
-        const c = [
-            "#ff6b9d",
-            "#c44dff",
-            "#4d7cff",
-            "#00d4ff",
-            "#40e0d0",
-            "#ff8c00",
-        ];
-        for (let i = c.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [c[i], c[j]] = [c[j], c[i]];
-        }
-        return c;
-    })(),
+    colors = ["#87CEEB", "#ADD8E6", "#80DEEA", "#4DD0E1", "#26C6DA"],
     speed = 0.7,
     className = "",
 }: Props) {
@@ -199,127 +187,155 @@ export function WebGLLogo({
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        const dpr = window.devicePixelRatio || 1;
-        const W = logoW;
-        const H = logoH;
+        let aborted = false;
 
-        canvas.width = Math.round(W * dpr);
-        canvas.height = Math.round(H * dpr);
-        canvas.style.width = `${W}px`;
-        canvas.style.height = `${H}px`;
+        const init = async () => {
+            const dpr = window.devicePixelRatio || 1;
+            const W = logoW;
+            const H = logoH;
 
-        const gl = canvas.getContext("webgl", {
-            alpha: true,
-            antialias: true,
-            premultipliedAlpha: true,
-        });
-        if (!gl) return;
+            canvas.width = Math.round(W * dpr);
+            canvas.height = Math.round(H * dpr);
+            canvas.style.width = `${W}px`;
+            canvas.style.height = `${H}px`;
 
-        const program = createProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
-        if (!program) return;
+            const gl = canvas.getContext("webgl", {
+                alpha: true,
+                antialias: true,
+                premultipliedAlpha: true,
+            });
+            if (!gl) return;
 
-        // ── Create mask texture from logo path ──
-        const maskCanvas = document.createElement("canvas");
-        maskCanvas.width = Math.round(W * dpr);
-        maskCanvas.height = Math.round(H * dpr);
-        const mCtx = maskCanvas.getContext("2d")!;
-        mCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        mCtx.fillStyle = "white";
-        const path = new Path2D(LOGO_PATH);
-        mCtx.fill(path);
+            const program = createProgram(gl, VERTEX_SHADER, FRAGMENT_SHADER);
+            if (!program) return;
 
-        // Optional: soft blur on mask for anti-aliased edges
-        // (the path itself is already anti-aliased by canvas)
+            // ── Load SVG and create mask texture ──
+            const svgImage = new Image();
+            svgImage.src = "/splashos_mask.svg";
+            await svgImage.decode();
+            if (aborted) return;
 
-        const maskTexture = gl.createTexture()!;
-        gl.bindTexture(gl.TEXTURE_2D, maskTexture);
-        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texImage2D(
-            gl.TEXTURE_2D,
-            0,
-            gl.RGBA,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            maskCanvas,
-        );
+            const maskCanvas = document.createElement("canvas");
+            maskCanvas.width = Math.round(W * dpr);
+            maskCanvas.height = Math.round(H * dpr);
+            const mCtx = maskCanvas.getContext("2d")!;
+            mCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        // ── Setup geometry ──
-        const buf = gl.createBuffer()!;
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(
-            gl.ARRAY_BUFFER,
-            new Float32Array([
-                -1, -1, 0, 0, 1, -1, 1, 0, -1, 1, 0, 1, 1, 1, 1, 1,
-            ]),
-            gl.STATIC_DRAW,
-        );
+            // Draw SVG at full logo size
+            mCtx.drawImage(svgImage, 0, 0, W, H);
 
-        const posLoc = gl.getAttribLocation(program, "a_position");
-        const uvLoc = gl.getAttribLocation(program, "a_uv");
-        const stride = 4 * 4;
-        gl.enableVertexAttribArray(posLoc);
-        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, stride, 0);
-        gl.enableVertexAttribArray(uvLoc);
-        gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 8);
+            // Convert all colored pixels to white mask (preserves alpha)
+            mCtx.globalCompositeOperation = "source-in";
+            mCtx.fillStyle = "white";
+            mCtx.fillRect(0, 0, W, H);
 
-        // ── Uniforms ──
-        const uTime = gl.getUniformLocation(program, "u_time")!;
-        const uSpeed = gl.getUniformLocation(program, "u_speed")!;
-        const uRes = gl.getUniformLocation(program, "u_resolution")!;
-        const uColorCount = gl.getUniformLocation(program, "u_colorCount")!;
-        const uColors = gl.getUniformLocation(program, "u_colors[0]")!;
-        const uMask = gl.getUniformLocation(program, "u_mask")!;
+            const maskTexture = gl.createTexture()!;
+            gl.bindTexture(gl.TEXTURE_2D, maskTexture);
+            gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+            gl.texParameteri(
+                gl.TEXTURE_2D,
+                gl.TEXTURE_WRAP_S,
+                gl.CLAMP_TO_EDGE,
+            );
+            gl.texParameteri(
+                gl.TEXTURE_2D,
+                gl.TEXTURE_WRAP_T,
+                gl.CLAMP_TO_EDGE,
+            );
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                maskCanvas,
+            );
 
-        // Build palette uniform (8 slots × 3 floats)
-        const paletteData = new Float32Array(24);
-        for (let i = 0; i < 8; i++) {
-            const c = colors[Math.min(i, colors.length - 1)];
-            const [r, g, b] = hexToRgb(c);
-            paletteData[i * 3] = r;
-            paletteData[i * 3 + 1] = g;
-            paletteData[i * 3 + 2] = b;
-        }
+            // ── Setup geometry ──
+            const buf = gl.createBuffer()!;
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+            gl.bufferData(
+                gl.ARRAY_BUFFER,
+                new Float32Array([
+                    -1, -1, 0, 0, 1, -1, 1, 0, -1, 1, 0, 1, 1, 1, 1, 1,
+                ]),
+                gl.STATIC_DRAW,
+            );
 
-        gl.useProgram(program);
-        gl.uniform1i(uMask, 0);
-        gl.uniform2f(uRes, W, H);
-        gl.uniform1i(uColorCount, Math.min(colors.length, 8));
-        gl.uniform3fv(uColors, paletteData);
-        gl.uniform1f(uSpeed, Math.max(speed, 0.1));
+            const posLoc = gl.getAttribLocation(program, "a_position");
+            const uvLoc = gl.getAttribLocation(program, "a_uv");
+            const stride = 4 * 4;
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, stride, 0);
+            gl.enableVertexAttribArray(uvLoc);
+            gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, stride, 8);
 
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            // ── Uniforms ──
+            const uTime = gl.getUniformLocation(program, "u_time")!;
+            const uSpeed = gl.getUniformLocation(program, "u_speed")!;
+            const uRes = gl.getUniformLocation(program, "u_resolution")!;
+            const uColorCount = gl.getUniformLocation(program, "u_colorCount")!;
+            const uColors = gl.getUniformLocation(program, "u_colors[0]")!;
+            const uMask = gl.getUniformLocation(program, "u_mask")!;
 
-        // ── Render loop ──
-        let start = performance.now();
-        let animId = 0;
-
-        const render = (now: number) => {
-            const elapsed = (now - start) * 0.001;
-            gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+            // Build palette uniform (8 slots × 3 floats)
+            const paletteData = new Float32Array(24);
+            for (let i = 0; i < 8; i++) {
+                const c = colors[Math.min(i, colors.length - 1)];
+                const [r, g, b] = hexToRgb(c);
+                paletteData[i * 3] = r;
+                paletteData[i * 3 + 1] = g;
+                paletteData[i * 3 + 2] = b;
+            }
 
             gl.useProgram(program);
-            gl.uniform1f(uTime, elapsed);
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, maskTexture);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            gl.uniform1i(uMask, 0);
+            gl.uniform2f(uRes, W, H);
+            gl.uniform1i(uColorCount, Math.min(colors.length, 8));
+            gl.uniform3fv(uColors, paletteData);
+            gl.uniform1f(uSpeed, Math.max(speed, 0.1));
+
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+            // ── Render loop ──
+            let start = performance.now();
+            let animId = 0;
+
+            const render = (now: number) => {
+                const elapsed = (now - start) * 0.001;
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0, 0, 0, 0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                gl.useProgram(program);
+                gl.uniform1f(uTime, elapsed);
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, maskTexture);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+                animId = requestAnimationFrame(render);
+            };
 
             animId = requestAnimationFrame(render);
+
+            // Store cleanup so the effect teardown can call it
+            teardown = () => {
+                cancelAnimationFrame(animId);
+                gl.deleteTexture(maskTexture);
+                gl.deleteBuffer(buf);
+                gl.deleteProgram(program);
+            };
         };
 
-        animId = requestAnimationFrame(render);
+        let teardown: (() => void) | null = null;
+        init().catch(() => {});
 
         return () => {
-            cancelAnimationFrame(animId);
-            gl.deleteTexture(maskTexture);
-            gl.deleteBuffer(buf);
-            gl.deleteProgram(program);
+            aborted = true;
+            teardown?.();
         };
     }, [logoW, logoH, colors, speed]);
 
