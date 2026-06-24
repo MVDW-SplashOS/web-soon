@@ -1,19 +1,78 @@
 /* ── Layout ─────────────────────────────────────────── */
+
+/* Loading dots */
+.loader {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    z-index: 10;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.6);
+    animation: dot-bounce 1.2s ease-in-out infinite both;
+}
+
+.dot:nth-child(1) {
+    animation-delay: 0s;
+}
+.dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+.dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes dot-bounce {
+    0%,
+    60%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.3;
+    }
+    30% {
+        transform: translateY(-16px);
+        opacity: 1;
+    }
+}
+
 .container {
     display: flex;
     flex-direction: column;
     align-items: center;
+    min-height: 100%;
+    padding: clamp(16px, 5vw, 32px);
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    padding-top: max(24px, env(safe-area-inset-top));
+    opacity: 0;
+    transition: opacity 0.6s ease-out;
+}
+
+.container.loaded {
+    opacity: 1;
+}
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
     justify-content: center;
+    gap: clamp(32px, 6vw, 64px);
     width: 100%;
-    height: 100%;
-    gap: 28px;
-    padding: 32px;
 }
 
 .logo-stage {
     position: relative;
-    width: min(480px, 72vw);
+    width: min(320px, 40vw);
     aspect-ratio: 480 / 460;
+    flex-shrink: 0;
 }
 
 /* The WebGL canvas fills the stage */
@@ -79,8 +138,7 @@
     font-weight: 700;
     letter-spacing: -0.03em;
     color: #fff;
-    opacity: 0.9;
-    animation: fade-up 1s ease-out 0.3s both;
+    opacity: 0;
 }
 
 .subtitle {
@@ -89,7 +147,14 @@
     letter-spacing: 0.3em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.45);
-    animation: fade-up 1s ease-out 0.6s both;
+    opacity: 0;
+}
+
+.text-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
 }
 
 /* ── Text fade-in ──────────────────────────────────── */
@@ -101,5 +166,65 @@
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+/* ── Footer ───────────────────────────────────────── */
+.footer {
+    padding: 32px 0 0;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.3);
+    letter-spacing: 0.02em;
+    text-align: center;
+    opacity: 0;
+}
+
+.footer a {
+    color: rgba(255, 255, 255, 0.45);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer a:hover {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* ── Staggered fade-in after shaders are ready ────── */
+.container.loaded .title {
+    animation: fade-up 1s ease-out 0.3s both;
+    opacity: 0.9;
+}
+
+.container.loaded .subtitle {
+    animation: fade-up 1s ease-out 0.6s both;
+}
+
+.container.loaded .footer {
+    animation: fade-up 1s ease-out 0.9s both;
+}
+
+/* ── Narrow screens: stacked layout ────────────────── */
+@media (max-width: 560px) {
+    .content {
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .logo-stage {
+        width: min(480px, 72vw);
+    }
+
+    .text-group {
+        align-items: center;
+        text-align: center;
+    }
+
+    .title {
+        font-size: clamp(28px, 6vw, 56px);
+    }
+
+    .subtitle {
+        font-size: clamp(16px, 3vw, 24px);
+        letter-spacing: 0.3em;
     }
 }

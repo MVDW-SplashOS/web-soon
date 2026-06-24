@@ -172,14 +172,17 @@ interface Props {
     speed?: number;
     /** CSS class for the canvas wrapper */
     className?: string;
+    /** Called when shaders are compiled and first frame renders */
+    onReady?: () => void;
 }
 
 export function WebGLLogo({
     logoW = 480,
     logoH = 460,
-    colors = ["#87CEEB", "#ADD8E6", "#80DEEA", "#4DD0E1", "#26C6DA"],
+    colors = ["#ffffff", "#a3d4fd", "#0e79f4", "#2492fc"],
     speed = 0.7,
     className = "",
+    onReady,
 }: Props) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -211,7 +214,7 @@ export function WebGLLogo({
 
             // ── Load SVG and create mask texture ──
             const svgImage = new Image();
-            svgImage.src = "/splashos_mask.svg";
+            svgImage.src = "/logo_mask.svg";
             await svgImage.decode();
             if (aborted) return;
 
@@ -303,6 +306,7 @@ export function WebGLLogo({
             // ── Render loop ──
             let start = performance.now();
             let animId = 0;
+            let firstFrame = true;
 
             const render = (now: number) => {
                 const elapsed = (now - start) * 0.001;
@@ -315,6 +319,11 @@ export function WebGLLogo({
                 gl.activeTexture(gl.TEXTURE0);
                 gl.bindTexture(gl.TEXTURE_2D, maskTexture);
                 gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+                if (firstFrame) {
+                    firstFrame = false;
+                    onReady?.();
+                }
 
                 animId = requestAnimationFrame(render);
             };
