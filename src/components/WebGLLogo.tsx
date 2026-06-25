@@ -1,8 +1,17 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hexToRgb } from "../utils/convert";
 import { createProgram } from "../utils/shader";
 import vertSrc from "../shaders/logo.vert";
 import fragSrc from "../shaders/logo.frag";
+
+function hasWebGL(): boolean {
+    try {
+        const c = document.createElement("canvas");
+        return !!(c.getContext("webgl") || c.getContext("experimental-webgl"));
+    } catch {
+        return false;
+    }
+}
 
 interface Props {
     logoW?: number;
@@ -24,6 +33,25 @@ export function WebGLLogo({
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const onReadyRef = useRef(onReady);
     onReadyRef.current = onReady;
+    const [webglOk] = useState(() => hasWebGL());
+
+    // Fallback: show static SVG when WebGL is unavailable
+    if (!webglOk) {
+        return (
+            <img
+                src="/logo.svg"
+                alt="SplashOS logo"
+                className={className}
+                style={{
+                    display: "block",
+                    width: "100%",
+                    height: "auto",
+                    aspectRatio: `${logoW} / ${logoH}`,
+                }}
+                onLoad={() => onReadyRef.current?.()}
+            />
+        );
+    }
 
     useEffect(() => {
         const canvas = canvasRef.current;
