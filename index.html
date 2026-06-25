@@ -6,6 +6,81 @@
 
         <title>SplashOS</title>
 
+        <!-- Critical CSS — rendered before any JS loads -->
+        <style>
+            *,
+            *::before,
+            *::after {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            html,
+            body,
+            #root {
+                width: 100%;
+                height: 100%;
+                overflow-x: hidden;
+                background: radial-gradient(
+                    ellipse at center,
+                    rgba(13, 8, 50, 0.85) 0%,
+                    #000 100%
+                );
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    "Segoe UI",
+                    Roboto,
+                    sans-serif;
+                -webkit-font-smoothing: antialiased;
+                color: #fff;
+            }
+            .loader {
+                position: fixed;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                z-index: 10;
+            }
+            .dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.6);
+                animation: dot-bounce 1.2s ease-in-out infinite both;
+            }
+            .dot:nth-child(1) {
+                animation-delay: 0s;
+            }
+            .dot:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+            .dot:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+            @keyframes dot-bounce {
+                0%,
+                60%,
+                100% {
+                    transform: translateY(0);
+                    opacity: 0.3;
+                }
+                30% {
+                    transform: translateY(-16px);
+                    opacity: 1;
+                }
+            }
+            .container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100%;
+                opacity: 0;
+            }
+        </style>
+
         <meta
             name="description"
             content="SplashOS is a modern open-source operating system crafted for a seamless, elegant, and intuitive desktop experience."
