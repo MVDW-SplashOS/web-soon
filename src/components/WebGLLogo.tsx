@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { hexToRgb } from "../utils/convert";
-import { fetchShader, createProgram } from "../utils/shader";
+import { createProgram } from "../utils/shader";
+import vertSrc from "../shaders/logo.vert";
+import fragSrc from "../shaders/logo.frag";
 
 interface Props {
     logoW?: number;
@@ -45,13 +47,6 @@ export function WebGLLogo({
                 premultipliedAlpha: true,
             });
             if (!gl) return;
-
-            // Fetch shaders from /public/shaders/
-            const [vertSrc, fragSrc] = await Promise.all([
-                fetchShader("/shaders/logo.vert"),
-                fetchShader("/shaders/logo.frag"),
-            ]);
-            if (aborted) return;
 
             const program = createProgram(gl, vertSrc, fragSrc);
 

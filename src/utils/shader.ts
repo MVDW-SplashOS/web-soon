@@ -1,10 +1,3 @@
-export async function fetchShader(url: string): Promise<string> {
-    const res = await fetch(url);
-    if (!res.ok)
-        throw new Error(`Failed to load shader: ${url} (${res.status})`);
-    return res.text();
-}
-
 export function createShader(
     gl: WebGLRenderingContext,
     type: number,
