@@ -142,7 +142,6 @@ body,
     color: rgba(255, 255, 255, 0.3);
     letter-spacing: 0.02em;
     text-align: center;
-    opacity: 0;
 }
 
 .footer a {
@@ -163,10 +162,6 @@ body,
 
 .container.loaded .subtitle {
     animation: fade-up 1s ease-out 0.6s both;
-}
-
-.container.loaded .footer {
-    animation: fade-up 1s ease-out 0.9s both;
 }
 
 /* ── Narrow screens: stacked layout ────────────────── */
